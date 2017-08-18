@@ -47,10 +47,30 @@ class adaptive_sampler(object):
             node for node in self.graph if node not in evidence
         ]
 
-        # importance conditional probability tables
-        self.icpt = self.cpt.copy()
+        self._set_icpt()
 
-        # TODO initialize icpt for evidence
+    def _set_icpt(self):
+        """
+        Initialize the icp table for the
+        proposal distribution.
+        """
+
+        self.icpt = self.cpt.copy()
+        icpt = self.icpt
+
+        # setting icpt for parents of evidence nodes
+        # to uniform distribution (according to original paper on AIS-BN)
+        for e in self.evidence:
+            for parent in self.graph[e]:
+                if parent is not None:
+                    if isinstance(icpt[parent], list):
+                        # prior node
+                        n = len(icpt[parent])
+                        icpt[parent] = [1.0/n]*n
+                    else:
+                        for p in icpt[parent]:
+                            n = len(icpt[parent][p])
+                            icpt[parent][p] = [1.0/n]*n
 
     def ais_bn(self, num_of_samples=100):
         """
