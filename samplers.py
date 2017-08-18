@@ -8,15 +8,15 @@ def likelihood_weight(parents, cpt, evidence, num_of_samples=1000):
     """
 
     Samples weights and particles given the description of
-    a network throuh parents and CPT.
+    a network through parents and CPT.
+
+    experimental code.
 
     """
-
     topo_nodes = toposort_flatten(parents)
     topo_nodes = topo_nodes[1::]
 
     n_nodes = len(topo_nodes)
-
 
     def single_sample(topo_nodes, n_nodes, parents, cpt):
         # single particle
@@ -68,12 +68,3 @@ def cpt_sample(node, parent_vals, cpt):
     return sample
 
 
-def adaptive_importance_sampling(parents, CPT, evidence):
-    """
-
-    Samples weights and particles given the description of
-    a network through parents and CPT.
-
-    """
-
-    pass
