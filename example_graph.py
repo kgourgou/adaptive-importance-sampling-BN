@@ -30,13 +30,13 @@ CPT = {
         'A1': [0.6, 0.4]
     },
     C: {
-        'A0': [0.8, 0.2],
-        'A1': [0.9, 0.1]
+        'A0': [1-0.99, 0.99],
+        'A1': [0.99, 1-0.99]
     },
     E: {
         'B0C0': [0.1, 0.9],
         'B0C1': [1e-7, 1 - 1e-7],
-        'B1C0': [0.4, 0.6],
+        'B1C0': [1-1e-10, 1e-10],
         'B1C1': [0.1, 0.999]
     },
     D: {
@@ -45,17 +45,45 @@ CPT = {
     }
 }
 
-f = lambda x: 1
-sampler = adaptive_sampler(graph=GRAPH, cpt=CPT, importance_weight_fun=f)
-sampler.set_evidence({C:1})
-samples, weights, _ = sampler.ais_bn(num_of_samples=100)
+
+def spread(w):
+    """
+    The closer to zero, the better.
+    """
+    result = max(w) / sum(w)
+    return result
+
+
+def f(x):
+    return 1
+
+
+sampler = adaptive_sampler(graph=GRAPH, cpt=CPT,
+                           importance_weight_fun=f,
+                           update_proposal_every=100)
+sampler.set_evidence({C: 1})
+samples, weights, _ = sampler.ais_bn(num_of_samples=10000)
 
 print("Estimate of P(B=1|C=1) = {}".format(
     sum([sample[B] * weights[i]
          for i, sample in enumerate(samples)]) / sum(weights)))
 print("variance of weights = {}".format(var(weights)))
+print("spread = {}".format(spread(weights)))
 
-# This won't work anymore
+sampler = adaptive_sampler(graph=GRAPH, cpt=CPT,
+                           importance_weight_fun=f)
+
+sampler.set_evidence({C: 0})
+samples, weights, _ = sampler.ais_bn(num_of_samples=10000)
+
+print("Estimate of P(B=1|C=0) = {}".format(
+    sum([sample[B] * weights[i]
+         for i, sample in enumerate(samples)]) / sum(weights)))
+print("variance of weights = {}".format(var(weights)))
+
+print("spread = {}".format(spread(weights)))
+
+# This won't work anymore due to changes.
 # samples, weights = likelihood_weight(GRAPH, CPT, {C: 1}, num_of_samples=1000)
 # norm_weights = weights / sum(weights)
 
