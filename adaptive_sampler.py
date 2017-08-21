@@ -1,8 +1,15 @@
 """
 
-Class for importance sampler.
+Class for defining adaptive importance samplers for Bayesian networks.
+
+Note that this currently only works for nodes with two states, although
+some work has been done to generalize it to networks with more dimension.
+
+This is a (loose) implementation of AIS-BN by Cheng, Druzdzel.
+See: https://arxiv.org/abs/1106.0253
 
 """
+
 from toposort import toposort_flatten as flatten
 from misc import dict_to_string, weight_average, string_to_dict, char_fun
 
@@ -25,13 +32,11 @@ class adaptive_sampler(object):
         self.graph = graph
 
         self.nodes = flatten(graph)
-
         # Remove None's
         self.nodes = self.nodes[1::]
 
         self.cpt = cpt
         self.graph = graph
-
         self.num_of_variables = len(self.nodes)
 
     def set_evidence(self, evidence):
@@ -121,7 +126,12 @@ class adaptive_sampler(object):
                 p = sc.cumsum(icpt)
             else:
                 # get relevant prob. dist
-                parents = {key: sample[key] for key in self.graph[node]}
+                try:
+                    parents = {key: sample[key] for key in self.graph[node]}
+                except KeyError:
+                    # TODO bug to fix with sampling
+                    import pdb; pdb.set_trace()
+
                 key = dict_to_string(parents)
                 p = sc.cumsum(icpt[key])
 
@@ -236,7 +246,7 @@ class adaptive_sampler(object):
                         1 - ratio - self.icpt[node][key][1])
 
     @staticmethod
-    def eta_rate(k, a=0.4, b=0.14, kmax=10):
+    def eta_rate(k, a=0.4, b=0.14, kmax=100):
         """
         Parametric learning rate.
         """
