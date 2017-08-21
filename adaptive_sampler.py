@@ -17,18 +17,12 @@ import scipy as sc
 
 
 class adaptive_sampler(object):
-    def __init__(self,
-                 graph,
-                 cpt,
-                 importance_weight_fun,
-                 update_proposal_every=100):
+    def __init__(self, graph, cpt):
         """
         Pass initializing data to importance sampler.
 
         Note: This should be indepedent of the evidence possibly.
         """
-        self.eta_weight = importance_weight_fun
-        self.update_prop = update_proposal_every
         self.graph = graph
 
         self.nodes = flatten(graph)
@@ -83,29 +77,43 @@ class adaptive_sampler(object):
                             n = len(icpt[parent][p])
                             self.icpt[parent][p] = [1.0 / n] * n
 
-    def ais_bn(self, num_of_samples=100):
+    def ais_bn(self,
+               num_of_samples=100,
+               prop_weight_fun=lambda x: float(x > 10),
+               update_proposal_every=100):
         """
         Generates samples and weights through
         adaptive importance sampling.
+
+        num_of_samples: int, number of samples to generate.
+        prop_weight_fun: function that depends on the current
+        number of samples generated. Will scale the current
+        importance sampling weight.
         """
 
         samples = [None] * num_of_samples
         weights = sc.zeros([num_of_samples])
 
-        prop_weight = 1
+        self.update_prop = update_proposal_every
+
         sum_prop_weight = 0
         prop_update_num = 0
         last_update = 0
 
+        # parameter for the learning of the proposal
+        self.kmax = int(num_of_samples / self.update_prop)
+
         for i in range(num_of_samples):
 
             if i % self.update_prop == 0 and i > 0:
-                # update proposal with the last update_prop samples
+                # update proposal with the latest samples
                 learn_samples = samples[last_update:i]
                 self._update_proposal(learn_samples, weights[last_update:i],
                                       prop_update_num)
                 prop_update_num += 1
                 last_update = i
+
+            prop_weight = prop_weight_fun(i)
 
             samples[i] = self.proposal_sample()
             weights[i] = self._weight(samples[i], scalar=prop_weight)
@@ -130,7 +138,8 @@ class adaptive_sampler(object):
                     parents = {key: sample[key] for key in self.graph[node]}
                 except KeyError:
                     # TODO bug to fix with sampling
-                    import pdb; pdb.set_trace()
+                    print("This shouldn't happen!")
+                    raise
 
                 key = dict_to_string(parents)
                 p = sc.cumsum(icpt[key])
@@ -245,9 +254,9 @@ class adaptive_sampler(object):
                     self.icpt[node][key][1] += self.eta_rate(index) * (
                         1 - ratio - self.icpt[node][key][1])
 
-    @staticmethod
-    def eta_rate(k, a=0.4, b=0.14, kmax=100):
+    def eta_rate(self, k, a=0.4, b=0.14):
         """
         Parametric learning rate.
         """
-        return a * (a / b)**(k / kmax)
+
+        return a * (a / b)**(k / self.kmax)
