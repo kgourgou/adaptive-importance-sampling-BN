@@ -79,7 +79,7 @@ class adaptive_sampler(object):
 
     def ais_bn(self,
                num_of_samples=100,
-               prop_weight_fun=lambda x: float(x > 10),
+               prop_weight_fun=lambda x: float(x > 1),
                update_proposal_every=100):
         """
         Generates samples and weights through
@@ -166,12 +166,14 @@ class adaptive_sampler(object):
         P = self._eval_joint(sample, self.cpt)
         Q = self._eval_joint(sample, self.icpt)
 
-        if abs(P - Q) < 1e-10:
+        if abs(P - Q) < 1e-13:
             ratio = 1.0
         else:
             ratio = P / Q
 
-        return scalar * ratio
+        result = scalar*ratio
+
+        return result
 
     def _eval_joint(self, sample, cpt):
         """
