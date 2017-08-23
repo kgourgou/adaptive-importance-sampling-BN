@@ -10,34 +10,30 @@ See: https://arxiv.org/abs/1106.0253
 
 """
 
-from toposort import toposort_flatten as flatten
-from misc import dict_to_string, weight_average, string_to_dict, char_fun
-
 import scipy as sc
+from copy import deepcopy
+
+from update_proposals import update_proposal_cpt
 
 
 class adaptive_sampler(object):
-    def __init__(self, graph, cpt):
+    def __init__(self, net, rep="CPT"):
         """
         Pass initializing data to importance sampler.
-
-        Note: This should be indepedent of the evidence possibly.
         """
-        self.graph = graph
-
-        self.nodes = flatten(graph)
-        # Remove None's
-        self.nodes = self.nodes[1::]
-
-        self.cpt = cpt
-        self.graph = graph
+        self.graph = net.graph
+        self.nodes = net.nodes
         self.num_of_variables = len(self.nodes)
+
+        self.net = net
+
+        self.rep = rep
+        self.proposal = deepcopy(net)
 
     def set_evidence(self, evidence):
         """
         Sets the evidence for the run
         and initializes the ICPT tables.
-
         """
         self.evidence = evidence
 
@@ -52,30 +48,35 @@ class adaptive_sampler(object):
             for node in self.graph[e]:
                 self.evidence_parents.append(node)
 
-        self._set_icpt()
+        if self.rep == "CPT":
+            self._set_icpt()
+        elif self.rep == "Noisy-OR":
+            self._set_causality_strength()
+        else:
+            raise ValueError("Unknown option.")
 
     def _set_icpt(self):
         """
         Initialize the icp table for the
         proposal distribution.
         """
-
-        self.icpt = self.cpt.copy()
-        icpt = self.icpt
-
         # setting icpt for parents of evidence nodes
         # to uniform distribution (according to original paper on AIS-BN)
         for e in self.evidence:
             for parent in self.graph[e]:
                 if parent is not None:
-                    if isinstance(icpt[parent], list):
+                    if isinstance(self.proposal.cpt[parent], list):
                         # prior node
-                        n = len(icpt[parent])
-                        self.icpt[parent] = [1.0 / n] * n
+                        n = len(self.proposal.cpt[parent])
+                        self.proposal.cpt[parent] = [1.0 / n] * n
                     else:
-                        for p in icpt[parent]:
-                            n = len(icpt[parent][p])
-                            self.icpt[parent][p] = [1.0 / n] * n
+                        for p in self.proposal.cpt[parent]:
+                            n = len(self.proposal.cpt[parent][p])
+                            self.proposal.cpt[parent][p] = [1.0 / n] * n
+
+
+    def _set_causality_strength():
+        pass
 
     def ais_bn(self,
                num_of_samples=100,
@@ -108,8 +109,14 @@ class adaptive_sampler(object):
             if i % self.update_prop == 0 and i > 0:
                 # update proposal with the latest samples
                 learn_samples = samples[last_update:i]
-                self._update_proposal(learn_samples, weights[last_update:i],
-                                      prop_update_num)
+                if self.rep == "CPT":
+                    self.proposal = update_proposal_cpt(
+                        self.proposal, learn_samples, weights[last_update:i],
+                        prop_update_num, self.graph, self.evidence_parents,
+                        self.eta_rate)
+
+                # self._update_proposal(learn_samples, weights[last_update:i],
+                #                       prop_update_num)
                 prop_update_num += 1
                 last_update = i
 
@@ -125,32 +132,36 @@ class adaptive_sampler(object):
         """
         Generates a sample from the current proposal distribution.
         """
+        sample = self.proposal.sample(set_nodes=self.evidence)
 
-        sample = self.evidence.copy()
-        for node in self.nodes_minus_e:
-            icpt = self.icpt[node]
+        # for key in self.evidence:
+        #     sample[key] = self.evidence[key]
 
-            if self.graph[node] == {None}:
-                p = sc.cumsum(icpt)
-            else:
-                # get relevant prob. dist
-                try:
-                    parents = {key: sample[key] for key in self.graph[node]}
-                except KeyError:
-                    # TODO bug to fix with sampling
-                    print("This shouldn't happen!")
-                    raise
+        # sample = self.evidence.copy()
+        # for node in self.nodes_minus_e:
+        #     icpt = self.icpt[node]
 
-                key = dict_to_string(parents)
-                p = sc.cumsum(icpt[key])
+        #     if self.graph[node] == {None}:
+        #         p = sc.cumsum(icpt)
+        #     else:
+        #         # get relevant prob. dist
+        #         try:
+        #             parents = {key: sample[key] for key in self.graph[node]}
+        #         except KeyError:
+        #             # TODO bug to fix with sampling
+        #             print("This shouldn't happen!")
+        #             raise
 
-            u = sc.rand()
-            # sample state for node
-            # states are assumed to be enumerated 0, ..., n
-            for i, prob in enumerate(p):
-                if u < prob:
-                    sample[node] = i
-                    break
+        #         key = dict_to_string(parents)
+        #         p = sc.cumsum(icpt[key])
+
+        #     u = sc.rand()
+        #     # sample state for node
+        #     # states are assumed to be enumerated 0, ..., n
+        #     for i, prob in enumerate(p):
+        #         if u < prob:
+        #             sample[node] = i
+        #             break
 
         return sample
 
@@ -160,105 +171,52 @@ class adaptive_sampler(object):
 
         P(sample, evidence)/Q(sample)*scalar
 
-        where P is the original joint, Q is the proposal.
+        where P is the original joint_prob, Q is the proposal.
         """
 
-        P = self._eval_joint(sample, self.cpt)
-        Q = self._eval_joint(sample, self.icpt)
+        P = self.net.joint_prob(sample)
+        Q = self.proposal.joint_prob(sample)
+        # P = self._eval_joint_prob(sample, self.cpt)
+        # Q = self._eval_joint_prob(sample, self.icpt)
 
         if abs(P - Q) < 1e-13:
             ratio = 1.0
         else:
             ratio = P / Q
 
-        result = scalar*ratio
+        result = scalar * ratio
 
         return result
 
-    def _eval_joint(self, sample, cpt):
-        """
-        sample: dict, {"A":0, "B":1}
-        cpt: dict of dicts with the conditional probability
-        distributions. See example.
+    # def _eval_joint_prob(self, sample, cpt):
+    #     """
+    #     sample: dict, {"A":0, "B":1}
+    #     cpt: dict of dicts with the conditional probability
+    #     distributions. See example.
 
-        This function evaluates the joint over the
-        sample in the "sample" dictionary.
-        """
+    #     This function evaluates the joint_prob over the
+    #     sample in the "sample" dictionary.
+    #     """
 
-        nodes = [key for key in self.nodes if key in sample]
+    #     nodes = [key for key in self.nodes if key in sample]
 
-        result = 1.0
+    #     result = 1.0
 
-        for node in nodes:
-            node_cpt = cpt[node]
-            state = sample[node]
+    #     for node in nodes:
+    #         node_cpt = cpt[node]
+    #         state = sample[node]
 
-            if self.graph[node] == {None}:
-                result *= node_cpt[state]
-            else:
-                parents = {key: sample[key] for key in self.graph[node]}
-                key = dict_to_string(parents)
-                result *= node_cpt[key][state]
+    #         if self.graph[node] == {None}:
+    #             result *= node_cpt[state]
+    #         else:
+    #             parents = {key: sample[key] for key in self.graph[node]}
+    #             key = dict_to_string(parents)
+    #             result *= node_cpt[key][state]
 
-        return result
-
-    def _update_proposal(self, samples, weights, index):
-        """
-        Updates current proposal given the new data.
-
-        Arguments
-        =========
-        samples: the current samples to use.
-        index: the current index (used to pick the weight)
-
-        """
-
-        # Initialize weighted estimator
-        wei_est = weight_average(samples, weights)
-
-        # estimate CPT table from samples
-        for node in self.evidence_parents:
-            if node is None:
-                continue
-            elif self.graph[node] == {None}:
-
-                def f(sample):
-                    res1 = char_fun(sample, {node: 0})
-                    return res1
-
-                p, _ = wei_est.eval(f)
-
-                self.icpt[node][0] += self.eta_rate(index) * (
-                    p - self.icpt[node][0])
-                self.icpt[node][1] += self.eta_rate(index) * (
-                    1 - p - self.icpt[node][1])
-            else:
-                lcpt = self.icpt[node]
-                for key in lcpt:
-
-                    parent_dict = string_to_dict(key)
-
-                    def f(sample):
-                        res1 = char_fun(sample, {node: 0})
-                        res2 = char_fun(sample, parent_dict)
-                        return res1 * res2
-
-                    def g(sample):
-                        res2 = char_fun(sample, parent_dict)
-                        return res2
-
-                    p, _ = wei_est.eval(f)
-                    q, _ = wei_est.eval(g)
-                    ratio = p / q
-
-                    self.icpt[node][key][0] += self.eta_rate(index) * (
-                        ratio - self.icpt[node][key][0])
-                    self.icpt[node][key][1] += self.eta_rate(index) * (
-                        1 - ratio - self.icpt[node][key][1])
+    #     return result
 
     def eta_rate(self, k, a=0.4, b=0.14):
         """
         Parametric learning rate.
         """
-
         return a * (a / b)**(k / self.kmax)

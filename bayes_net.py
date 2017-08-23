@@ -7,7 +7,6 @@ from misc import dict_to_string
 
 from scipy import prod, rand
 
-
 class BayesNet(object):
     """
     Object to hold and evaluate probabilities
@@ -82,24 +81,25 @@ class BayesNet(object):
 
         return result
 
-    def sample(self):
+    def sample(self, set_nodes={}):
         """
         Generate single sample from BN.
 
         This only assumes binary variables.
-
-        TODO not completed yet
         """
 
-        sample = {}
-        for node in self.nodes:
+        # sample all but the already set nodes
+        nodes = [n for n in self.nodes
+                 if n not in set_nodes]
+        sample = set_nodes.copy()
+        for node in nodes:
+
             if self.is_root_node(node):
                 p = self.prior(node, True)
-                sample[node] = self.bernoulli(p)
             else:
                 p = self.cond_prob(node, True, sample)
-                sample[node] = self.bernoulli(p)
 
+            sample[node] = self.bernoulli(p)
         return sample
 
     def msample(self, num_of_samples=100):
