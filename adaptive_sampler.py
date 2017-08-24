@@ -13,7 +13,7 @@ See: https://arxiv.org/abs/1106.0253
 import scipy as sc
 from copy import deepcopy
 
-from update_proposals import update_proposal_cpt
+from update_proposals import update_proposal_cpt, update_proposal_lambdas
 
 
 class adaptive_sampler(object):
@@ -74,9 +74,24 @@ class adaptive_sampler(object):
                             n = len(self.proposal.cpt[parent][p])
                             self.proposal.cpt[parent][p] = [1.0 / n] * n
 
+    def _set_causality_strength(self):
+        """
+        Initialize lambdas for the parents
+        of evidence nodes.
+        """
 
-    def _set_causality_strength():
-        pass
+        for e in self.evidence:
+            for parent in self.graph[e]:
+                if self.proposal.is_root_node(parent):
+                    n = len(self.proposal.prior_dict[parent])
+                    self.proposal.prior_dict[parent] = [1.0/n]*n
+                else:
+                    # init lambdas
+                    for p in self.proposal.lambdas[parent]:
+                        if p == "leak_node":
+                            self.proposal.lambdas[parent][p] = 0.5
+                        else:
+                            self.proposal.lambdas[parent][p] = 1.0
 
     def ais_bn(self,
                num_of_samples=100,
@@ -115,8 +130,12 @@ class adaptive_sampler(object):
                         prop_update_num, self.graph, self.evidence_parents,
                         self.eta_rate)
 
-                # self._update_proposal(learn_samples, weights[last_update:i],
-                #                       prop_update_num)
+                elif self.rep == "Noisy-OR":
+                    self.proposal = update_proposal_lambdas(
+                        self.proposal, learn_samples, weights[last_update:i],
+                        prop_update_num, self.graph, self.evidence_parents,
+                        self.eta_rate)
+
                 prop_update_num += 1
                 last_update = i
 
@@ -134,35 +153,6 @@ class adaptive_sampler(object):
         """
         sample = self.proposal.sample(set_nodes=self.evidence)
 
-        # for key in self.evidence:
-        #     sample[key] = self.evidence[key]
-
-        # sample = self.evidence.copy()
-        # for node in self.nodes_minus_e:
-        #     icpt = self.icpt[node]
-
-        #     if self.graph[node] == {None}:
-        #         p = sc.cumsum(icpt)
-        #     else:
-        #         # get relevant prob. dist
-        #         try:
-        #             parents = {key: sample[key] for key in self.graph[node]}
-        #         except KeyError:
-        #             # TODO bug to fix with sampling
-        #             print("This shouldn't happen!")
-        #             raise
-
-        #         key = dict_to_string(parents)
-        #         p = sc.cumsum(icpt[key])
-
-        #     u = sc.rand()
-        #     # sample state for node
-        #     # states are assumed to be enumerated 0, ..., n
-        #     for i, prob in enumerate(p):
-        #         if u < prob:
-        #             sample[node] = i
-        #             break
-
         return sample
 
     def _weight(self, sample, scalar=1):
@@ -176,10 +166,8 @@ class adaptive_sampler(object):
 
         P = self.net.joint_prob(sample)
         Q = self.proposal.joint_prob(sample)
-        # P = self._eval_joint_prob(sample, self.cpt)
-        # Q = self._eval_joint_prob(sample, self.icpt)
 
-        if abs(P - Q) < 1e-13:
+        if abs(P - Q) < 1e-15:
             ratio = 1.0
         else:
             ratio = P / Q
@@ -188,34 +176,7 @@ class adaptive_sampler(object):
 
         return result
 
-    # def _eval_joint_prob(self, sample, cpt):
-    #     """
-    #     sample: dict, {"A":0, "B":1}
-    #     cpt: dict of dicts with the conditional probability
-    #     distributions. See example.
-
-    #     This function evaluates the joint_prob over the
-    #     sample in the "sample" dictionary.
-    #     """
-
-    #     nodes = [key for key in self.nodes if key in sample]
-
-    #     result = 1.0
-
-    #     for node in nodes:
-    #         node_cpt = cpt[node]
-    #         state = sample[node]
-
-    #         if self.graph[node] == {None}:
-    #             result *= node_cpt[state]
-    #         else:
-    #             parents = {key: sample[key] for key in self.graph[node]}
-    #             key = dict_to_string(parents)
-    #             result *= node_cpt[key][state]
-
-    #     return result
-
-    def eta_rate(self, k, a=0.4, b=0.14):
+    def eta_rate(self, k, a=0.3, b=0.14):
         """
         Parametric learning rate.
         """
