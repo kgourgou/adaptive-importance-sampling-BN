@@ -7,6 +7,7 @@ from misc import dict_to_string
 
 from scipy import prod, rand
 
+
 class BayesNet(object):
     """
     Object to hold and evaluate probabilities
@@ -89,8 +90,7 @@ class BayesNet(object):
         """
 
         # sample all but the already set nodes
-        nodes = [n for n in self.nodes
-                 if n not in set_nodes]
+        nodes = [n for n in self.nodes if n not in set_nodes]
         sample = set_nodes.copy()
         for node in nodes:
 
@@ -134,7 +134,7 @@ class BNNoisyORLeaky(BayesNet):
 
     """
 
-    def __init__(self, graph, lambdas, PRIOR):
+    def __init__(self, graph, lambdas, prior):
         """
         graph: dictionary of form {child:{parent1, parent2},}.
         Expects {None} for the parents of root nodes.
@@ -149,15 +149,17 @@ class BNNoisyORLeaky(BayesNet):
         """
 
         self.nodes = flatten(graph)
+        self.nodes = self.nodes[1::]
         self.graph = graph
         self.lambdas = lambdas
-        self.prior = PRIOR
+        self.prior_dict = prior
 
     def prior(self, node, node_value):
         if node_value is True:
-            result = self.prior[node]
+            result = self.prior_dict[node][1]
         else:
-            result = 1.0 - self.prior[node]
+            result = self.prior_dict[node][0]
+
         return result
 
     def cond_prob(self, child, value, all_vals):
@@ -176,8 +178,16 @@ class BNNoisyORLeaky(BayesNet):
 
         """
         rel_lambdas = self.lambdas[child]
-        lambdas_for_true = (rel_lambdas[node] for node in all_vals
-                            if all_vals[node] is True)
+        result = 1
+        for key in rel_lambdas:
+            if key != "leak_node":
+                if all_vals[key] == int(True):
+                    result *= rel_lambdas[key]
 
-        result = prod(lambdas_for_true) * rel_lambdas["leak_node"]
+        # multiply by leak node
+        result *= rel_lambdas["leak_node"]
+
+        if value == int(True):
+            result = 1 - result
+
         return result
