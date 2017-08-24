@@ -11,7 +11,7 @@ from scipy import mean, var
 from samplers import likelihood_weight
 from adaptive_sampler import adaptive_sampler
 
-from bayes_net import BayesNet
+from bayes_net import BayesNet, BNNoisyORLeaky
 
 import matplotlib.pyplot as pl
 
