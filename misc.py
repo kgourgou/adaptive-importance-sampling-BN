@@ -7,8 +7,7 @@ from scipy import mean, var
 
 def dict_to_string(some_dict):
     result = ""
-    sorted_keys = sorted(some_dict,
-                         key=lambda key: key)
+    sorted_keys = sorted(some_dict, key=lambda key: key)
     new_dict = {key: some_dict[key] for key in sorted_keys}
 
     for key in new_dict:
@@ -28,7 +27,7 @@ def string_to_dict(s):
     if n % 2 != 0:
         raise ValueError("string has an odd number of characters.")
 
-    new_dict = {sp[i]: float(sp[i+1]) for i in range(0, n-1, 2)}
+    new_dict = {sp[i]: float(sp[i + 1]) for i in range(0, n - 1, 2)}
     return new_dict
 
 
@@ -48,7 +47,6 @@ def char_fun(sample_dict, comparison_dict):
 
 
 class weight_average(object):
-
     """
     Class to calculate weighted averages.
     Defaults to normal averages if no
@@ -65,7 +63,7 @@ class weight_average(object):
         self.values = values
 
         if weights is not None:
-            self.weights = weights/sum(weights)
+            self.weights = weights / sum(weights)
 
     def eval(self, f=lambda x: 1):
         """
@@ -79,16 +77,13 @@ class weight_average(object):
             variance = var(vec)
         else:
             v = self.values
-            vec = [f(v[i])*w for i, w in enumerate(self.weights)]
+            vec = [f(v[i]) * w for i, w in enumerate(self.weights)]
             result = sum(vec)
             variance = var(vec)
 
         return result, variance
 
 
-
-
-
 if __name__ == '__main__':
-    some_dict = {"B": 0, "A":1}
+    some_dict = {"B": 0, "A": 1}
     print(dict_to_string(some_dict))
