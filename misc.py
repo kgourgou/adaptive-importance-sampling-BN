@@ -3,6 +3,7 @@ misc. functions
 """
 
 from scipy import mean, var
+import json
 
 
 def dict_to_string(some_dict):
@@ -84,6 +85,43 @@ class weight_average(object):
         return result, variance
 
 
+def parse_node_file(filename):
+    """
+    Parses a node file and creates the following variables:
+
+    graph = {child:{None}, child:{Parent1, Parent2}, ...}
+    prior = {node: [prior values]}
+    lambdas = {parent:{child1:lambda1, child2:lambda2, leak_node:lambda0}}
+
+    Those can then be used with the samplers, e.g., adaptive, annealed, etc.
+    """
+
+    with open(filename) as inputfile:
+        data = json.load(inputfile)
+
+        graph = {}
+        prior = {}
+        lambdas = {}
+
+        for key in data:
+           # root node
+            d = data[key]
+            if len(d["parents"]) == 0:
+                graph[key] = {None}
+                prior[key] = d["cpt"]
+            else:
+                graph[key] = {p for p in d["parents"]}
+                t = graph[key]
+                c = d["cpt"]
+                lambdas[key] = {node: c[i] for i, node in enumerate(t)}
+                lambdas[key]["leak_node"] = c[len(t)]
+
+    return graph, prior, lambdas
+
+
 if __name__ == '__main__':
     some_dict = {"B": 0, "A": 1}
     print(dict_to_string(some_dict))
+
+    filename = "data/approximate_network_all_mixed_any_age.json"
+    graph, prior, lambdas = parse_node_file(filename)
