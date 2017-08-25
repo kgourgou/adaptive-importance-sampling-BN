@@ -5,6 +5,8 @@ misc. functions
 from scipy import mean, var
 import json
 
+import scipy as sc
+
 
 def dict_to_string(some_dict):
     result = ""
@@ -64,7 +66,8 @@ class weight_average(object):
         self.values = values
 
         if weights is not None:
-            self.weights = weights / sum(weights)
+            self.weights = sc.exp(weights)
+            self.weights = self.weights / sum(self.weights)
 
     def eval(self, f=lambda x: 1):
         """

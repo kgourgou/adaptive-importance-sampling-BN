@@ -67,11 +67,13 @@ def f(x):
     return 1
 
 
+import scipy 
 sampler = adaptive_sampler(net)
 sampler.set_evidence({B: 1})
 samples, weightsg, _ = sampler.ais_bn(
     num_of_samples=10000, update_proposal_every=100)
 
+weightsg = scipy.exp(weightsg)
 est = sum([sample[C] * weightsg[i]
            for i, sample in enumerate(samples)]) / sum(weightsg)
 print("Estimate of P(C=1|B=1) = {}".format(est))
@@ -85,10 +87,13 @@ sampler.set_evidence({B: 1})
 samples, weights, _ = sampler.ais_bn(
     num_of_samples=10000, update_proposal_every=10000)
 
+
+weights = scipy.exp(weights)
 print("Estimate of P(C=1|B=1) = {}".format(
     sum([sample[C] * weights[i]
          for i, sample in enumerate(samples)]) / sum(weights)))
 print("variance of weights = {}".format(var(weights)))
+print("mean of weights = {}".format(mean(weights)))
 pl.hist(weights, bins=30, label="likelihood weighting")
 
 pl.legend(fontsize=15, loc=0)

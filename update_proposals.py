@@ -1,5 +1,6 @@
 from misc import weight_average, string_to_dict, char_fun
 
+from scipy import log, exp
 
 def update_proposal_cpt(proposal, samples, weights, index, graph,
                         evidence_parents, eta_rate):
@@ -48,7 +49,12 @@ def update_proposal_cpt(proposal, samples, weights, index, graph,
 
                 p, _ = wei_est.eval(f)
                 q, _ = wei_est.eval(g)
-                ratio = p / q
+
+
+                if abs(p - q) < 1e-10:
+                    ratio = 1
+                else:
+                    ratio = p / q
 
                 proposal.cpt[node][key][0] += eta_rate(index) * (
                     ratio - proposal.cpt[node][key][0])
@@ -94,6 +100,7 @@ def update_proposal_lambdas(proposal, samples, weights, index, graph,
             for key in proposal.lambdas[node]:
                 state_vec = {p: False for p in parents}
                 if key == "leak_node":
+
                     def f(sample):
                         return char_fun(sample, state_vec)
 
@@ -106,7 +113,10 @@ def update_proposal_lambdas(proposal, samples, weights, index, graph,
 
                     p, _ = wei_est.eval(f)
 
-                    ratio = p / q
+                    if abs(q) < 1e-30:
+                        continue
+
+                    ratio = exp(log(p)-log(q))
 
                     proposal.lambdas[node]["leak_node"] += eta_rate(index) * (
                         ratio - proposal.lambdas[node]["leak_node"])
@@ -125,7 +135,8 @@ def update_proposal_lambdas(proposal, samples, weights, index, graph,
                         return char_fun(sample, state_vec)
 
                     p, _ = wei_est.eval(f)
-                    ratio = p / q
+
+                    ratio = exp(log(p)-log(q))
 
                     proposal.lambdas[node][key] += eta_rate(index) * (
                         ratio - proposal.lambdas[node][key])

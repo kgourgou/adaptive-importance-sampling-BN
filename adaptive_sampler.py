@@ -166,13 +166,8 @@ class adaptive_sampler(object):
 
         P = self.net.joint_prob(sample)
         Q = self.proposal.joint_prob(sample)
-
-        if abs(P - Q) < 1e-15:
-            ratio = 1.0
-        else:
-            ratio = P / Q
-
-        result = scalar * ratio
+        ratio = sc.log(P) - sc.log(Q)
+        result = ratio*scalar
 
         return result
 
