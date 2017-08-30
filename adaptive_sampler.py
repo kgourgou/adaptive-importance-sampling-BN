@@ -83,32 +83,36 @@ class adaptive_sampler(object):
         for e in self.evidence:
             for parent in self.graph[e]:
                 if self.proposal.is_root_node(parent):
+                    # Set priors to be uniform
                     n = len(self.proposal.prior_dict[parent])
-                    self.proposal.prior_dict[parent] = [1.0/n]*n
+                    p = self.proposal.prior_dict[parent]
+                    if p[0] < 1e-6 or p[0] > 1 - 1e-6:
+                        self.proposal.prior_dict[parent] = [1.0 / n] * n
                 else:
                     # init lambdas
                     for p in self.proposal.lambdas[parent]:
                         if p == "leak_node":
-                            self.proposal.lambdas[parent][p] = 0.5
+                            self.proposal.lambdas[parent][p] = 0.9
                         else:
-                            self.proposal.lambdas[parent][p] = 1.0
+                            self.proposal.lambdas[parent][p] = 0.9
 
     def ais_bn(self,
                num_of_samples=100,
-               prop_weight_fun=lambda x: float(x > 1),
-               update_proposal_every=100):
+               update_proposal_every=100,
+               skip_n=3,
+               kmax=None):
         """
         Generates samples and weights through
         adaptive importance sampling.
 
-        num_of_samples: int, number of samples to generate.
-        prop_weight_fun: function that depends on the current
-        number of samples generated. Will scale the current
-        importance sampling weight.
+        Arguments:
+         - num_of_samples: int, number of samples to generate.
+         - update_proposal_every: int, how many samples to accumulate before
+           updating the proposal.
+         - skip_n: int, how many "update_proposal_every" samples/weights to throw
+        away (because initial proposal is not very good).
+        - kmax: int, how many times to update the proposal.
         """
-
-        samples = [None] * num_of_samples
-        weights = sc.zeros([num_of_samples])
 
         self.update_prop = update_proposal_every
 
@@ -116,12 +120,22 @@ class adaptive_sampler(object):
         prop_update_num = 0
         last_update = 0
 
-        # parameter for the learning of the proposal
-        self.kmax = int(num_of_samples / self.update_prop)
+        skip = skip_n * update_proposal_every
+        t_samples = num_of_samples + skip
 
-        for i in range(num_of_samples):
+        samples = [None] * t_samples
+        weights = sc.zeros([t_samples])
 
-            if i % self.update_prop == 0 and i > 0:
+        if kmax is None:
+            # parameter for the learning of the proposal
+            self.kmax = int(t_samples / self.update_prop)
+        else:
+            self.kmax = kmax
+
+        for i in range(t_samples):
+
+            if i % self.update_prop == 0 and prop_update_num < self.kmax\
+               and i > 0:
                 # update proposal with the latest samples
                 learn_samples = samples[last_update:i]
                 if self.rep == "CPT":
@@ -135,16 +149,16 @@ class adaptive_sampler(object):
                         self.proposal, learn_samples, weights[last_update:i],
                         prop_update_num, self.graph, self.evidence_parents,
                         self.eta_rate)
-
                 prop_update_num += 1
                 last_update = i
 
-            prop_weight = prop_weight_fun(i)
-
+            # prop_weight = prop_weight_fun(prop_update_num)
             samples[i] = self.proposal_sample()
-            weights[i] = self._weight(samples[i], scalar=prop_weight)
-            sum_prop_weight += prop_weight
+            weights[i] = self._weight(samples[i])
 
+        sum_prop_weight = len(samples) - skip
+        samples = samples[skip:len(samples)]
+        weights = weights[skip:len(weights)]
         return samples, weights, sum_prop_weight
 
     def proposal_sample(self):
@@ -167,11 +181,11 @@ class adaptive_sampler(object):
         P = self.net.joint_prob(sample)
         Q = self.proposal.joint_prob(sample)
         ratio = sc.log(P) - sc.log(Q)
-        result = ratio*scalar
+        result = ratio * scalar
 
         return result
 
-    def eta_rate(self, k, a=0.3, b=0.14):
+    def eta_rate(self, k, a=0.4, b=0.14):
         """
         Parametric learning rate.
         """

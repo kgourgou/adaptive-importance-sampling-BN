@@ -70,7 +70,7 @@ class weight_average(object):
             self.weights = self.weights / sum(self.weights)
 
     def eval(self, f=lambda x: 1):
-        """
+        """"
         evaluate function on the values
         and take weighted average.
         """
@@ -107,7 +107,7 @@ def parse_node_file(filename):
         lambdas = {}
 
         for key in data:
-           # root node
+            # root node
             d = data[key]
             if len(d["parents"]) == 0:
                 graph[key] = {None}

@@ -2,6 +2,7 @@ from misc import weight_average, string_to_dict, char_fun
 
 from scipy import log, exp
 
+
 def update_proposal_cpt(proposal, samples, weights, index, graph,
                         evidence_parents, eta_rate):
     """
@@ -50,7 +51,6 @@ def update_proposal_cpt(proposal, samples, weights, index, graph,
                 p, _ = wei_est.eval(f)
                 q, _ = wei_est.eval(g)
 
-
                 if abs(p - q) < 1e-10:
                     ratio = 1
                 else:
@@ -79,66 +79,70 @@ def update_proposal_lambdas(proposal, samples, weights, index, graph,
     wei_est = weight_average(samples, weights)
 
     # estimate CPT table from samples
-    for node in evidence_parents:
-        if node is None:
+    for child in evidence_parents:
+        if child is None:
             continue
-        elif proposal.is_root_node(node):
-            # root node -- update prior
+        elif proposal.is_root_node(child):
+            # root child -- update prior
             def f(sample):
-                res1 = char_fun(sample, {node: 0})
+                res1 = char_fun(sample, {child: 1})
                 return res1
 
             p, _ = wei_est.eval(f)
 
-            proposal.prior_dict[node][0] += eta_rate(index) * (
-                p - proposal.prior_dict[node][0])
-            proposal.prior_dict[node][1] += eta_rate(index) * (
-                1 - p - proposal.prior_dict[node][1])
+            proposal.prior_dict[child][0] += eta_rate(index) * (
+                1 - p - proposal.prior_dict[child][0])
+            proposal.prior_dict[child][1] += eta_rate(index) * (
+                p - proposal.prior_dict[child][1])
         else:
-            # rest of the nodes -- lambdas
-            parents = [ident for ident in graph[node]]
-            for key in proposal.lambdas[node]:
+            # rest of the childs -- lambdas
+            parents = [ident for ident in graph[child]]
+            for parent in proposal.lambdas[child]:
                 state_vec = {p: False for p in parents}
-                if key == "leak_node":
-
+                if parent == "leak_node":
                     def f(sample):
                         return char_fun(sample, state_vec)
 
                     q, _ = wei_est.eval(f)
 
-                    state_vec[node] = False
+                    state_vec[child] = False
 
                     def f(sample):
                         return char_fun(sample, state_vec)
 
                     p, _ = wei_est.eval(f)
-
-                    if abs(q) < 1e-30:
+                    if abs(p) < 1e-16 or abs(q) < 1e-16:
+                        # Do not update if probabilities are
+                        # too small
                         continue
+                    ratio = exp(log(p) - log(q))
 
-                    ratio = exp(log(p)-log(q))
-
-                    proposal.lambdas[node]["leak_node"] += eta_rate(index) * (
-                        ratio - proposal.lambdas[node]["leak_node"])
+                    proposal.lambdas[child]["leak_node"] += eta_rate(index) * (
+                        ratio - proposal.lambdas[child]["leak_node"])
                 else:
                     # TODO: something is wrong with this part
                     # and it doesn't estimate correctly
-                    state_vec[key] = True
+                    state_vec[parent] = True
 
                     def f(sample):
                         return char_fun(sample, state_vec)
 
                     q, _ = wei_est.eval(f)
-                    state_vec[node] = False
+                    state_vec[child] = False
 
                     def f(sample):
                         return char_fun(sample, state_vec)
 
                     p, _ = wei_est.eval(f)
 
-                    ratio = exp(log(p)-log(q))
+                    if abs(p) < 1e-16 or abs(q) < 1e-16:
+                        # Do not update if probabilities are
+                        # too small
+                        continue
 
-                    proposal.lambdas[node][key] += eta_rate(index) * (
-                        ratio - proposal.lambdas[node][key])
+                    ratio = exp(log(p) - log(q))
+
+                    proposal.lambdas[child][parent] += eta_rate(index) * (
+                        ratio - proposal.lambdas[child][parent])
 
     return proposal
