@@ -33,7 +33,7 @@ sampler.set_evidence({
 
 tic = clock()
 samples, weights, _ = sampler.ais_bn(
-    num_of_samples=10000, update_proposal_every=1000, skip_n=3)
+    num_of_samples=10000, update_proposal_every=2000, skip_n=0)
 toc = clock()
 
 print("elapsed time = {:1.3f} min.".format((toc - tic)/60.0))

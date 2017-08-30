@@ -5,7 +5,7 @@ Classes to represent Bayesian networks.
 from toposort import toposort_flatten as flatten
 from misc import dict_to_string
 
-from scipy import prod, rand
+from scipy import rand, prod
 
 
 class BayesNet(object):
@@ -90,16 +90,17 @@ class BayesNet(object):
         """
 
         # sample all but the already set nodes
-        nodes = [n for n in self.nodes if n not in set_nodes]
-        sample = set_nodes.copy()
-        for node in nodes:
+        nodes = (n for n in self.nodes if n not in set_nodes)
 
+        sample = set_nodes.copy()
+
+        for node in nodes:
             if self.is_root_node(node):
                 p = self.prior(node, True)
             else:
                 p = self.cond_prob(node, True, sample)
 
-            sample[node] = self.bernoulli(p)
+            sample[node] = int(rand() < p)
         return sample
 
     def msample(self, num_of_samples=100):
@@ -111,18 +112,6 @@ class BayesNet(object):
         for i in range(num_of_samples):
             samples[i] = self.sample()
         return samples
-
-    @staticmethod
-    def bernoulli(p):
-        """
-        p is P(X=1)=P(X=True)
-        """
-        u = rand()
-        if u < p:
-            result = 1
-        else:
-            result = 0
-        return result
 
     def is_root_node(self, node):
         result = (self.graph[node] == {None})
@@ -178,13 +167,15 @@ class BNNoisyORLeaky(BayesNet):
 
         """
         rel_lambdas = self.lambdas[child]
+
         result = 1
+        n = len(rel_lambdas)
         for key in rel_lambdas:
             if key != "leak_node":
                 if all_vals[key] == int(True):
                     result *= rel_lambdas[key]
 
-        # multiply by leak node
+        # # multiply by leak node
         result *= rel_lambdas["leak_node"]
 
         if value == int(True):

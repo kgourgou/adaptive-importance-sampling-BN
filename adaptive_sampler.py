@@ -15,6 +15,9 @@ from copy import deepcopy
 
 from update_proposals import update_proposal_cpt, update_proposal_lambdas
 
+from time import clock
+
+from tqdm import tqdm
 
 class adaptive_sampler(object):
     def __init__(self, net, rep="CPT"):
@@ -28,6 +31,9 @@ class adaptive_sampler(object):
         self.net = net
 
         self.rep = rep
+
+        # proposal is assumed to have the same
+        # representation as the original net
         self.proposal = deepcopy(net)
 
     def set_evidence(self, evidence):
@@ -132,34 +138,55 @@ class adaptive_sampler(object):
         else:
             self.kmax = kmax
 
-        for i in range(t_samples):
+        update_proposal_bool = True
 
-            if i % self.update_prop == 0 and prop_update_num < self.kmax\
-               and i > 0:
+        update_clock = 0
+        sampling_clock = 0
+
+        for i in tqdm(range(t_samples)):
+
+            update_tic = clock()
+            if i % self.update_prop == 0 and update_proposal_bool and i > 0:
                 # update proposal with the latest samples
                 learn_samples = samples[last_update:i]
+                learn_weights = weights[last_update:i]
+
+                if prop_update_num > 0:
+                    # stopping criterion
+                    update_proposal_bool = (sc.var(sc.exp(learn_weights)) > 0.5
+                                            and prop_update_num < self.kmax)
+
                 if self.rep == "CPT":
                     self.proposal = update_proposal_cpt(
-                        self.proposal, learn_samples, weights[last_update:i],
+                        self.proposal, learn_samples, learn_weights,
                         prop_update_num, self.graph, self.evidence_parents,
                         self.eta_rate)
 
                 elif self.rep == "Noisy-OR":
                     self.proposal = update_proposal_lambdas(
-                        self.proposal, learn_samples, weights[last_update:i],
+                        self.proposal, learn_samples, learn_weights,
                         prop_update_num, self.graph, self.evidence_parents,
                         self.eta_rate)
                 prop_update_num += 1
                 last_update = i
 
+            update_clock += clock() - update_tic
+
+            sampling_stamp = clock()
             # prop_weight = prop_weight_fun(prop_update_num)
             samples[i] = self.proposal_sample()
             weights[i] = self._weight(samples[i])
+            sampling_clock += clock() - sampling_stamp
 
-        sum_prop_weight = len(samples) - skip
+        sum_prop_weight = t_samples - skip
         samples = samples[skip:len(samples)]
         weights = weights[skip:len(weights)]
+
+        print("Updating took {:1.3f} min.".format(update_clock / 60.0))
+        print("Sampling took {:1.3f} min".format(sampling_clock / 60.0))
+
         return samples, weights, sum_prop_weight
+
 
     def proposal_sample(self):
         """

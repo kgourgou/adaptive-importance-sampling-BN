@@ -80,20 +80,22 @@ def update_proposal_lambdas(proposal, samples, weights, index, graph,
 
     # estimate CPT table from samples
     for child in evidence_parents:
+
         if child is None:
             continue
         elif proposal.is_root_node(child):
-            # root child -- update prior
+            # root child -- update priors using current samples
+
             def f(sample):
                 res1 = char_fun(sample, {child: 1})
                 return res1
-
             p, _ = wei_est.eval(f)
 
             proposal.prior_dict[child][0] += eta_rate(index) * (
                 1 - p - proposal.prior_dict[child][0])
             proposal.prior_dict[child][1] += eta_rate(index) * (
                 p - proposal.prior_dict[child][1])
+
         else:
             # rest of the childs -- lambdas
             parents = [ident for ident in graph[child]]

@@ -34,19 +34,16 @@ def string_to_dict(s):
     return new_dict
 
 
-def char_fun(sample_dict, comparison_dict):
-    """
-    Characteristic function of the comparison_dict.
+def char_fun(A, b):
     """
 
-    for key in comparison_dict:
-        if key in sample_dict:
-            if sample_dict[key] != comparison_dict[key]:
-                return 0
-        else:
-            return 0
+    Returns True if dictionary b is a subset
+    of dictionary A and False.
+    """
 
-    return 1
+    result = b.items() <= A.items()
+
+    return result
 
 
 class weight_average(object):
