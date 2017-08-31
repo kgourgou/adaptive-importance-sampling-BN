@@ -19,22 +19,38 @@ from time import clock
 
 from tqdm import tqdm
 
+
 class adaptive_sampler(object):
-    def __init__(self, net, rep="CPT"):
+    def __init__(self, net, rep="CPT", proposal=None, adapt_flag=True):
         """
         Pass initializing data to importance sampler.
+
+        Arguments::
+        - net: BayesNet object representing the
+        original Bayesian network we wish to sample
+
+        - rep: str, either "CPT" or "Noisy-Or", stands for the
+        representation of the proposal.
+
+        - proposal: BayesNet object or None. Used for
+        importance sampling.
+
+        - adapt_flag: boole, whether to adapt the proposal.
+
         """
         self.graph = net.graph
         self.nodes = net.nodes
         self.num_of_variables = len(self.nodes)
 
         self.net = net
-
         self.rep = rep
 
-        # proposal is assumed to have the same
-        # representation as the original net
-        self.proposal = deepcopy(net)
+        self.adapt_flag = adapt_flag
+
+        if proposal is None:
+            self.proposal = deepcopy(net)
+        else:
+            self.proposal = proposal
 
     def set_evidence(self, evidence):
         """
@@ -126,9 +142,12 @@ class adaptive_sampler(object):
         prop_update_num = 0
         last_update = 0
 
-        skip = skip_n * update_proposal_every
-        t_samples = num_of_samples + skip
+        if self.adapt_flag:
+            skip = skip_n * update_proposal_every
+        else:
+            skip = 0
 
+        t_samples = num_of_samples + skip
         samples = [None] * t_samples
         weights = sc.zeros([t_samples])
 
@@ -146,7 +165,8 @@ class adaptive_sampler(object):
         for i in tqdm(range(t_samples)):
 
             update_tic = clock()
-            if i % self.update_prop == 0 and update_proposal_bool and i > 0:
+            if i % self.update_prop == 0 and update_proposal_bool and i > 0\
+               and self.adapt_flag:
                 # update proposal with the latest samples
                 learn_samples = samples[last_update:i]
                 learn_weights = weights[last_update:i]
@@ -186,7 +206,6 @@ class adaptive_sampler(object):
         print("Sampling took {:1.3f} min".format(sampling_clock / 60.0))
 
         return samples, weights, sum_prop_weight
-
 
     def proposal_sample(self):
         """
