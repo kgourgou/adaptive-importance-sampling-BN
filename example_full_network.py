@@ -23,27 +23,54 @@ net = BNNoisyORLeaky(GRAPH, lambdas, prior)
 # samples = net.msample(num_of_samples=1000)
 
 sampler = adaptive_sampler(net, rep="Noisy-OR")
-sampler.set_evidence({
+
+evi = {
     "d0542984-7a52-4da5-b31f-c6847c2efe0c": 1,
     "450535cc-04c5-4fed-8c4b-92189438e58a": 0,
     "f838d3d9-78f7-4323-bea5-ee5d5dd2cd95": 1,
     "32de23a9-0925-499c-8475-e3601d89588c": 0,
     "d09fcdbb-9411-46d8-affd-fa5fce2fab00": 1
-})
+}
+
+sampler.set_evidence(evi)
 
 tic = clock()
 samples, weights, _ = sampler.ais_bn(
-    num_of_samples=10000, update_proposal_every=2000, skip_n=0)
+    num_of_samples=int(1e4), update_proposal_every=5000, skip_n=3)
 toc = clock()
 
-print("elapsed time = {:1.3f} min.".format((toc - tic)/60.0))
+print("elapsed time = {:1.3f} min.".format((toc - tic) / 60.0))
 
 wa = exp(weights)
 print("variance of weights = {}".format(var(wa)))
 print("mean of weights = {}".format(mean(wa)))
 print("diameter = {}".format(max(wa) - min(wa)))
-print("spread = {}".format(max(wa)/sum(wa)))
+print("spread = {}".format(max(wa) / sum(wa)))
 
+sampler = adaptive_sampler(
+    net, rep="Noisy-OR")
+
+evi = {
+    "d0542984-7a52-4da5-b31f-c6847c2efe0c": 1,
+    "450535cc-04c5-4fed-8c4b-92189438e58a": 0,
+    "f838d3d9-78f7-4323-bea5-ee5d5dd2cd95": 1,
+    "d09fcdbb-9411-46d8-affd-fa5fce2fab00": 1
+}
+
+sampler.set_evidence(evi)
+
+tic = clock()
+samples, weights, _ = sampler.ais_bn(
+    num_of_samples=int(1e4), update_proposal_every=5000, skip_n=3)
+toc = clock()
+
+print("elapsed time = {:1.3f} min.".format((toc - tic) / 60.0))
+
+wa = exp(weights)
+print("variance of weights = {}".format(var(wa)))
+print("mean of weights = {}".format(mean(wa)))
+print("diameter = {}".format(max(wa) - min(wa)))
+print("spread = {}".format(max(wa) / sum(wa)))
 # est = weight_average(samples, weights)
 # f = lambda x: x["4758798f-fc15-4fab-9d76-4f66397c0b09"]
 # print(est.eval(f))
