@@ -1,12 +1,14 @@
 import json
-import pickle
-
-from misc import weight_average, parse_node_file
+from misc import weight_average, parse_node_file, char_fun
 from adaptive_sampler import adaptive_sampler
 from bayes_net import BNNoisyORLeaky
-import csv
 
 from joblib import Parallel, delayed
+
+from os.path import exists
+
+import scipy as sc
+
 
 def card_to_evidence(card, pgm_network):
     items = card['symptoms'] + card['risk_factors']
@@ -68,26 +70,88 @@ GRAPH, prior, lambdas = parse_node_file(filename)
 net = BNNoisyORLeaky(GRAPH, lambdas, prior)
 sampler = adaptive_sampler(net, rep="Noisy-OR")
 
+nodes = net.nodes
 
-def single_run(data, i, sampler, nsample=1e6):
+
+def single_run(evidence, i, sampler, nodes, nsample=1e6):
     """
     Carry out a single run with adaptive importance
-    sampling. 
+    sampling.
+
+    - evidence: dict, to be used as evidence.
+    - i: int, index of the evidence
+    - nodes:list, the names of all nodes
+    - nsample:int, number of samples to use
     """
+
     print("i={}".format(i))
-    sampler.set_evidence(data)
+
+    sampler.set_evidence(evidence)
     samples, weights, _ = sampler.ais_bn(
-        num_of_samples=int(nsample), update_proposal_every=10000, skip_n=3)
-    # store samples
-    with open("samples_and_weights/sw_{}.csv".format(i), 'w') as f:
-        writer = csv.writer(f, delimiter=",")
-        for i, _ in enumerate(samples):
-            writer.writerow([samples[i], weights[i]])
+        num_of_samples=int(nsample), update_proposal_every=30000, skip_n=3)
+
+    print("Done with sampling.")
+
+    w = sc.exp(weights)
+    var_value = sc.var(w)
+    print("variance of weights = {}".format(var_value))
+    print("mean = {} ".format(sc.mean(w)))
+    print("spread = {}".format(max(w)/sc.sum(w)))
+
+    # initialize estimator class
+    est = weight_average(samples, weights)
+
+    def f(sample):
+        return char_fun(sample, evidence)
+
+    p_evi, _ = est.eval(f)
+
+    if abs(p_evi) < 1e-10:
+        raise ValueError("Bad value of p(evidence)={}".format(p_evi))
+
+    # compute marginals here for anything that isn't evidence.
+    probs = {}
+    for key in nodes:
+        if key not in evidence:
+            # Compute probability P(key=True|Evidence)
+            probs[key] = estimate_joint(key, evidence, est)
+            probs[key] = probs[key] / p_evi
+
+    with open("samples_and_weights/marginals_{}.json".format(i), "w") as f:
+        json.dump(probs, f)
+
+    print("i={} is done.".format(i))
 
 
-Parallel(n_jobs=6)(delayed(single_run)(dataset[i], i, sampler, nsample=1e6)
-                   for i in dataset)
+def estimate_joint(node, evidence, est):
+    """
+    Estimate P(node=True|evidence) from a set
+    of weights and samples.
 
+    Arguments:
+    - node: str, name of node
+    - evidence: dict, contains the evidence nodes with
+    truth values.
+    - est: weight_estimator object, used to estimate
+    weighted averages.
+    """
+    temp = evidence.copy()
+    temp[node] = True
+
+    def f(sample):
+        return char_fun(sample, temp)
+
+    p, _ = est.eval(f)
+    return p
+
+
+# Parallel(n_jobs=5)(delayed(single_run)(
+#     dataset[i], i, sampler, nodes, nsample=1e5) for i in dataset)
+
+for i in dataset:
+    print(i)
+    single_run(dataset[i], i, sampler, nodes, nsample=1e4)
+    break
 
 # for k, v in dataset.items():
 #     ires = engine.analyse(v)

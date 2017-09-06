@@ -6,14 +6,10 @@ Note that all nodes are binary in this case.
 
 """
 
-from pprint import pprint
 from scipy import mean, var, exp
-from samplers import likelihood_weight
 from adaptive_sampler import adaptive_sampler
 from bayes_net import BNNoisyORLeaky
 from time import clock
-import matplotlib.pyplot as pl
-import seaborn as sns
 from misc import weight_average, parse_node_file
 
 filename = "data/approximate_network_all_mixed_any_age.json"

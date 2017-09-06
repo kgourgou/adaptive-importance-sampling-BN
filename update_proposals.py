@@ -117,13 +117,12 @@ def update_proposal_lambdas(proposal, samples, weights, index, graph,
                         # Do not update if probabilities are
                         # too small
                         continue
+
                     ratio = exp(log(p) - log(q))
 
                     proposal.lambdas[child]["leak_node"] += eta_rate(index) * (
                         ratio - proposal.lambdas[child]["leak_node"])
                 else:
-                    # TODO: something is wrong with this part
-                    # and it doesn't estimate correctly
                     state_vec[parent] = True
 
                     def f(sample):

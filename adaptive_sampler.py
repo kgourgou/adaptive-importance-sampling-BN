@@ -3,7 +3,7 @@
 Class for defining adaptive importance samplers for Bayesian networks.
 
 Note that this currently only works for nodes with two states, although
-some work has been done to generalize it to networks with more dimension.
+some work has been done to generalize it to networks with more states.
 
 This is a (loose) implementation of AIS-BN by Cheng, Druzdzel.
 See: https://arxiv.org/abs/1106.0253
@@ -12,13 +12,10 @@ See: https://arxiv.org/abs/1106.0253
 
 import scipy as sc
 from copy import deepcopy
-
 from update_proposals import update_proposal_cpt, update_proposal_lambdas
-
 from time import clock
 
 from tqdm import tqdm
-
 
 class adaptive_sampler(object):
     def __init__(self, net, rep="CPT", proposal=None, adapt_flag=True):
@@ -61,7 +58,7 @@ class adaptive_sampler(object):
 
         # we do not have to sample evidence nodes
         self.nodes_minus_e = [
-            node for node in self.graph if node not in evidence
+            node for node in self.nodes if node not in evidence
         ]
 
         # parents of the evidence nodes
@@ -85,6 +82,10 @@ class adaptive_sampler(object):
         # setting icpt for parents of evidence nodes
         # to uniform distribution (according to original paper on AIS-BN)
         for e in self.evidence:
+
+            if self.proposal.is_root_node(e):
+                continue
+
             for parent in self.graph[e]:
                 if parent is not None:
                     if isinstance(self.proposal.cpt[parent], list):
@@ -103,6 +104,10 @@ class adaptive_sampler(object):
         """
 
         for e in self.evidence:
+
+            if self.proposal.is_root_node(e):
+                continue
+
             for parent in self.graph[e]:
                 if self.proposal.is_root_node(parent):
                     # Set priors to be uniform
@@ -131,7 +136,8 @@ class adaptive_sampler(object):
          - num_of_samples: int, number of samples to generate.
          - update_proposal_every: int, how many samples to accumulate before
            updating the proposal.
-         - skip_n: int, how many "update_proposal_every" samples/weights to throw
+         - skip_n: int, how many "update_proposal_every"
+        samples/weights to throw
         away (because initial proposal is not very good).
         - kmax: int, how many times to update the proposal.
         """
@@ -163,7 +169,6 @@ class adaptive_sampler(object):
         sampling_clock = 0
 
         for i in tqdm(range(t_samples)):
-
             update_tic = clock()
             if i % self.update_prop == 0 and update_proposal_bool and i > 0\
                and self.adapt_flag:
@@ -176,6 +181,7 @@ class adaptive_sampler(object):
                     update_proposal_bool = (sc.var(sc.exp(learn_weights)) > 0.5
                                             and prop_update_num < self.kmax)
 
+                # TODO there should be only one update_proposal function
                 if self.rep == "CPT":
                     self.proposal = update_proposal_cpt(
                         self.proposal, learn_samples, learn_weights,
@@ -193,7 +199,6 @@ class adaptive_sampler(object):
             update_clock += clock() - update_tic
 
             sampling_stamp = clock()
-            # prop_weight = prop_weight_fun(prop_update_num)
             samples[i] = self.proposal_sample()
             weights[i] = self._weight(samples[i])
             sampling_clock += clock() - sampling_stamp

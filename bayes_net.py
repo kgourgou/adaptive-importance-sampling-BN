@@ -5,7 +5,7 @@ Classes to represent Bayesian networks.
 from toposort import toposort_flatten as flatten
 from misc import dict_to_string
 
-from scipy import rand, prod
+from scipy import rand, prod, clip
 
 
 class BayesNet(object):
@@ -14,7 +14,7 @@ class BayesNet(object):
     for BayesNets described by cpts.
     """
 
-    def __init__(self, graph, cpt):
+    def __init__(self, graph, cpt, clipper=False):
         """
         graph: dictionary of form {child:{parent1, parent2},}.
         Expects {None} for the parents of root nodes.
@@ -38,6 +38,7 @@ class BayesNet(object):
         self.nodes = self.nodes[1::]
         self.graph = graph
         self.cpt = cpt
+        self.clipper = clipper
 
     def joint_prob(self, node_values):
         """
@@ -57,6 +58,9 @@ class BayesNet(object):
                 result *= self.prior(node, node_values[node])
             else:
                 result *= self.cond_prob(node, node_values[node], node_values)
+
+        if self.clipper:
+            result = clip(result, 1e-10, 1-1e-10)
 
         return result
 
@@ -84,9 +88,8 @@ class BayesNet(object):
 
     def sample(self, set_nodes={}):
         """
-        Generate single sample from BN.
-
-        This only assumes binary variables.
+        Generate single sample from BayesNet with
+        binary variables.
         """
 
         # sample all but the already set nodes
@@ -114,7 +117,7 @@ class BayesNet(object):
         return samples
 
     def is_root_node(self, node):
-        result = (self.graph[node] == {None})
+        result = self.graph[node] == {None}
         return result
 
 
@@ -123,7 +126,7 @@ class BNNoisyORLeaky(BayesNet):
 
     """
 
-    def __init__(self, graph, lambdas, prior):
+    def __init__(self, graph, lambdas, prior, clipper=False):
         """
         graph: dictionary of form {child:{parent1, parent2},}.
         Expects {None} for the parents of root nodes.
@@ -142,6 +145,7 @@ class BNNoisyORLeaky(BayesNet):
         self.graph = graph
         self.lambdas = lambdas
         self.prior_dict = prior
+        self.clipper = clipper
 
     def prior(self, node, node_value):
         if node_value is True:

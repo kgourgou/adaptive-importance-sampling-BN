@@ -9,6 +9,15 @@ import scipy as sc
 
 
 def dict_to_string(some_dict):
+    """
+    Takes the {"A":some_value, "B":some_other_value}
+
+    to
+
+    "Asome_valueBsome_other_value".
+
+    This can then be used as a key for a CPT table.
+    """
     result = ""
     sorted_keys = sorted(some_dict, key=lambda key: key)
     new_dict = {key: some_dict[key] for key in sorted_keys}
@@ -38,7 +47,7 @@ def char_fun(A, b):
     """
 
     Returns True if dictionary b is a subset
-    of dictionary A and False.
+    of dictionary A and False otherwise.
     """
 
     result = b.items() <= A.items()
