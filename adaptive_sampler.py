@@ -13,9 +13,11 @@ See: https://arxiv.org/abs/1106.0253
 import scipy as sc
 from copy import deepcopy
 from update_proposals import update_proposal_cpt, update_proposal_lambdas
+from update_proposals import update_proposal_hybrid
 from time import clock
 
 from tqdm import tqdm
+
 
 class adaptive_sampler(object):
     def __init__(self, net, rep="CPT", proposal=None, adapt_flag=True):
@@ -32,7 +34,8 @@ class adaptive_sampler(object):
         - proposal: BayesNet object or None. Used for
         importance sampling.
 
-        - adapt_flag: boole, whether to adapt the proposal.
+        - adapt_flag: boole, whether to adapt the p
+roposal.
 
         """
         self.graph = net.graph
@@ -48,6 +51,7 @@ class adaptive_sampler(object):
             self.proposal = deepcopy(net)
         else:
             self.proposal = proposal
+            self.nodes = self.proposal.nodes
 
     def set_evidence(self, evidence):
         """
@@ -71,8 +75,53 @@ class adaptive_sampler(object):
             self._set_icpt()
         elif self.rep == "Noisy-OR":
             self._set_causality_strength()
+        elif self.rep == "Hybrid":
+            self._set_depending_on_nodes()
         else:
-            raise ValueError("Unknown option.")
+            raise ValueError("No such option for rep")
+
+    def _set_depending_on_nodes(self):
+        """
+        Initialise priors depending on the node style.
+        """
+        for e in self.evidence:
+            if self.proposal.is_root_node(e):
+                continue
+
+            for parent in self.graph[e]:
+                if self.nodes[parent] == "cpt":
+                    if isinstance(self.proposal.cpt_net.cpt[parent], list):
+                        # prior node
+                        n = len(self.proposal.cpt_net.cpt[parent])
+                        if max(self.proposal.cpt_net.cpt[parent]) > 0.9:
+                            self.proposal.cpt_net.cpt[parent] = [1.0 / n] * n
+                    else:
+                        for p in self.proposal.cpt_net.cpt[parent]:
+                            n = len(self.proposal.cpt_net.cpt[parent][p])
+                            # if max(self.proposal.cpt_net.cpt[parent][p]) > 0.9:
+                            #     self.proposal.cpt_net.cpt[parent][
+                            #         p] = [1.0 / n] * n
+
+                elif self.nodes[parent] == "noisy":
+                    if self.proposal.is_root_node(parent):
+                        # Set priors to be uniform
+
+                        n = len(self.proposal.cpt_net.cpt[parent])
+                        p = self.proposal.cpt_net.cpt[parent][0]
+
+                        if p < 1e-9 or p > 1 - 1e-9:
+                            self.proposal.noisy_net.prior_dict[
+                                parent] = [1.0 / n] * n
+
+                    else:
+                        # init lambdas
+                        for p in self.proposal.noisy_net.lambdas[parent]:
+                            if p == "leak_node":
+                                self.proposal.noisy_net.lambdas[parent][
+                                    p] = 0.9
+                            else:
+                                self.proposal.noisy_net.lambdas[parent][
+                                    p] = 0.9
 
     def _set_icpt(self):
         """
@@ -168,7 +217,11 @@ class adaptive_sampler(object):
         update_clock = 0
         sampling_clock = 0
 
-        for i in tqdm(range(t_samples)):
+        for i in range(t_samples):
+
+            if i % 4000 == 0:
+                print("{:1.3f}% done.".format(i/t_samples*100))
+
             update_tic = clock()
             if i % self.update_prop == 0 and update_proposal_bool and i > 0\
                and self.adapt_flag:
@@ -176,10 +229,17 @@ class adaptive_sampler(object):
                 learn_samples = samples[last_update:i]
                 learn_weights = weights[last_update:i]
 
+                vl = sc.var(sc.exp(learn_weights))
+                ml = sc.mean(sc.exp(learn_weights))
+                print("Var of learn_weights {:1.3f}".format(vl))
+                print("Mean of learn_weights {:1.3f}".format(ml))
+
                 if prop_update_num > 0:
                     # stopping criterion
-                    update_proposal_bool = (sc.var(sc.exp(learn_weights)) > 0.5
-                                            and prop_update_num < self.kmax)
+                    update_proposal_bool = (
+                        sc.var(sc.exp(learn_weights)) > 0.5 and
+                        abs(sc.sum(sc.exp(learn_weights) - 1) > 0.1) and
+                        prop_update_num < self.kmax)
 
                 # TODO there should be only one update_proposal function
                 if self.rep == "CPT":
@@ -193,6 +253,14 @@ class adaptive_sampler(object):
                         self.proposal, learn_samples, learn_weights,
                         prop_update_num, self.graph, self.evidence_parents,
                         self.eta_rate)
+
+                elif self.rep == "Hybrid":
+                    print("Updating proposal now...")
+                    self.proposal = update_proposal_hybrid(
+                        self.proposal, learn_samples, learn_weights,
+                        prop_update_num, self.graph, self.evidence_parents,
+                        self.eta_rate, self.proposal.nodes)
+
                 prop_update_num += 1
                 last_update = i
 
