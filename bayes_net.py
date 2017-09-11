@@ -14,7 +14,7 @@ class BayesNet(object):
     for BayesNets described by cpts.
     """
 
-    def __init__(self, graph, cpt, clipper=False):
+    def __init__(self, graph, cpt):
         """
         graph: dictionary of form {child:{parent1, parent2},}.
         Expects {None} for the parents of root nodes.
@@ -38,7 +38,6 @@ class BayesNet(object):
         self.nodes = self.nodes[1::]
         self.graph = graph
         self.cpt = cpt
-        self.clipper = clipper
 
     def joint_prob(self, node_values):
         """
@@ -58,9 +57,6 @@ class BayesNet(object):
                 result *= self.prior(node, node_values[node])
             else:
                 result *= self.cond_prob(node, node_values[node], node_values)
-
-        if self.clipper:
-            result = clip(result, 1e-10, 1-1e-10)
 
         return result
 
@@ -121,12 +117,55 @@ class BayesNet(object):
         return result
 
 
+class BNHybrid(BayesNet):
+    """
+    Represents a network that uses a combined
+    Noisy-OR / CPT representation for the nodes
+    of a Bayesian network.
+    """
+
+    def __init__(self, graph, nodes, lambdas, prior, cpts):
+        """
+        Initialise the hybrid network that uses both representations.
+
+        - graph: dict, {child:{parent1, parent2, }, ...}
+        - nodes: dict, holds the names of the nodes along with what
+        their representation will be, either noisy or cpt.
+        {child:"cpt", child2:"noisy"}
+        - lambdas: dict, see BNNoisyORLeaky
+        - prior: dict, holds the priors
+        - cpts: holds the conditional probability tables; see BayesNet.
+        """
+        self.nodes = nodes
+        self.cpt_net = BayesNet(graph, cpts)
+        self.noisy_net = BNNoisyORLeaky(graph, lambdas, prior)
+
+    def prior(self, node, node_value):
+        # if self.nodes[node] == "cpt":
+        result = self.cpt_net.prior(node, node_value)
+        # else:
+            # result = self.noisy_net.prior(node, node_value)
+        return result
+
+    def cond_prob(self, child, value, all_vals):
+        if self.nodes[child] == "cpt":
+            result = self.cpt_net.cond_prob(child, value, all_vals)
+        elif self.nodes[child] == "noisy":
+            result = self.noisy_net.cond_prob(child, value, all_vals)
+        return result
+
+    def is_root_node(self, node):
+        result = self.cpt_net.graph[node] == {None}
+        return result
+
+
 class BNNoisyORLeaky(BayesNet):
     """
-
+    Represents a network with Noisy-OR nodes (with a leak
+    node).
     """
 
-    def __init__(self, graph, lambdas, prior, clipper=False):
+    def __init__(self, graph, lambdas, prior):
         """
         graph: dictionary of form {child:{parent1, parent2},}.
         Expects {None} for the parents of root nodes.
@@ -145,7 +184,6 @@ class BNNoisyORLeaky(BayesNet):
         self.graph = graph
         self.lambdas = lambdas
         self.prior_dict = prior
-        self.clipper = clipper
 
     def prior(self, node, node_value):
         if node_value is True:
