@@ -10,7 +10,18 @@ def likelihood_weight(parents, cpt, evidence, num_of_samples=1000):
     Samples weights and particles given the description of
     a network through parents and CPT.
 
-    experimental code.
+
+    Arguments::
+    parents: dictionary, {node:None, another_node:{parent_1, parent_2}}
+    cpt: dictionary with the cpt values
+    TODO this needs to be changed so that it accepts an object with a function P
+    that can calculate CPTs.
+
+    evidence: dict with evidence, {node:True, node:False}
+
+    Returns:
+    samples and weights
+
 
     """
     topo_nodes = toposort_flatten(parents)

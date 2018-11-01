@@ -4,7 +4,9 @@ Classes to represent Bayesian networks.
 from toposort import toposort_flatten as flatten
 
 
-
+"""
+NOTE We can use this to represent a bayesian network!
+"""
 
 class BNNoisyORLeaky(BayesNet):
     """
@@ -60,7 +62,7 @@ class BNNoisyORLeaky(BayesNet):
         result = 1
         n = len(rel_lambdas)
         for key in rel_lambdas:
-            if key != "leak_node":
+            if key != "leak_node": # TODO need to make sure this is parsed correctly by the cpt
                 if all_vals[key] == int(True):
                     result *= rel_lambdas[key]
 

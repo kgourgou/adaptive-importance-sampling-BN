@@ -1,14 +1,12 @@
 """
+TODO: This all needs to change so that it can sample.
 
-Class for defining adaptive importance samplers for Bayesian networks.
+Basically, we need to pass an object that can calculate CPTs (based on the lambdas/priors) and joints
+as well as a proposal object that implements "sample" and "joint" methods. AND THAT IS IT!!!!
 
-Note that this currently only works for nodes with two states, although
-some work has been done to generalize it to networks with more states.
-
-This is a (loose) implementation of AIS-BN by Cheng, Druzdzel.
-See: https://arxiv.org/abs/1106.0253
 
 """
+
 
 import scipy as sc
 from copy import deepcopy
