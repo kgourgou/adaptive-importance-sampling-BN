@@ -1,13 +1,3 @@
-"""
-TODO: This all needs to change so that it can sample.
-
-Basically, we need to pass an object that can calculate CPTs (based on the lambdas/priors) and joints
-as well as a proposal object that implements "sample" and "joint" methods. AND THAT IS IT!!!!
-
-
-"""
-
-
 import scipy as sc
 from copy import deepcopy
 from update_proposals import update_proposal_cpt, update_proposal_lambdas
