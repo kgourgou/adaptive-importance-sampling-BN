@@ -7,3 +7,6 @@ See: https://arxiv.org/abs/1106.0253
 
 I couldn't find code I was happy with, so I wrote this instead. 
 Hope it's useful.
+
+
+*Note*: This example considers a noisy-OR parametrization and will run, but I accidentally broke the updating of the proposals. I may fix it, if I have some time. 
